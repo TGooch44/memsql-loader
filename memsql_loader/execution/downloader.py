@@ -6,9 +6,8 @@ import threading
 import time
 import os
 import zlib
+import boto3
 
-from boto.exception import S3ResponseError
-from boto.s3.connection import S3Connection
 from memsql_loader.execution.errors import WorkerException, ConnectionException, RequeueTask
 from memsql_loader.util import log, webhdfs
 from wraptor.decorators import throttle
@@ -105,13 +104,9 @@ class Downloader(threading.Thread):
         self.pycurl_callback_exception = None
 
         if task.data['scheme'] == 's3':
-            self.is_anonymous = job.spec.source.aws_access_key is None or job.spec.source.aws_secret_key is None
-            if self.is_anonymous:
-                s3_conn = S3Connection(anon=True)
-            else:
-                s3_conn = S3Connection(job.spec.source.aws_access_key, job.spec.source.aws_secret_key)
-            bucket = s3_conn.get_bucket(task.data['bucket'])
-
+            #self.is_anonymous = job.spec.source.aws_access_key is None or job.spec.source.aws_secret_key is None
+            s3 = boto3.resource('s3')
+            bucket = s3.Bucket(task.data['bucket'])
             try:
                 self.key = bucket.get_key(task.data['key_name'])
             except S3ResponseError as e:
@@ -164,7 +159,14 @@ class Downloader(threading.Thread):
                                 'path': self.key.name.encode('utf-8')
                             }
                         else:
-                            key_url = self.key.generate_url(expires_in=3600)
+                            #key_url = self.key.generate_url(expires_in=3600)
+                            url = s3.generate_presigned_url(
+                                ClientMethod='get_object',
+                                Params={
+                                    'Bucket': self.key.bucket.name,
+                                    'Key': self.key.key
+                                    }
+                                )
                     elif self.task.data['scheme'] == 'hdfs':
                         host = self.job.spec.source.hdfs_host
                         port = self.job.spec.source.webhdfs_port

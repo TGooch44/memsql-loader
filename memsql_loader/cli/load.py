@@ -6,6 +6,7 @@ import os
 import pycurl
 import sys
 import time
+import boto3
 
 from collections import defaultdict
 from memsql_loader.api import shared
@@ -18,8 +19,6 @@ from memsql_loader.util import bootstrap, log, db_utils, cli_utils, schema, webh
 from memsql_loader.util import super_json as json
 from memsql_loader.util.command import Command
 from simplejson import JSONDecodeError
-from boto.exception import S3ResponseError
-from boto.s3.connection import S3Connection
 import voluptuous as V
 
 ER_CONFIG_VALIDATION = """Invalid specification:
@@ -316,19 +315,20 @@ Invalid command line options for load:
 
     def validate_path_conditions(self, path):
         if path.scheme == 's3':
-            is_anonymous = self.job.spec.source.aws_access_key is None or self.job.spec.source.aws_secret_key is None
-            if is_anonymous:
-                self.logger.debug('Either access key or secret key was not specified, connecting to S3 as anonymous')
-                self.s3_conn = S3Connection(anon=True)
-            else:
-                self.logger.debug('Connecting to S3')
-                self.s3_conn = S3Connection(self.job.spec.source.aws_access_key, self.job.spec.source.aws_secret_key)
+            #is_anonymous = self.job.spec.source.aws_access_key is None or self.job.spec.source.aws_secret_key is None
+            #if is_anonymous:
+            #    self.logger.debug('Either access key or secret key was not specified, connecting to S3 as anonymous')
+            #    self.s3_conn = S3Connection(anon=True)
+            #else:
+            #    self.logger.debug('Connecting to S3')
+            #    self.s3_conn = S3Connection(self.job.spec.source.aws_access_key, self.job.spec.source.aws_secret_key)
+            self.s3_conn = boto3.resource('s3')
 
             try:
                 if not cli_utils.RE_VALIDATE_BUCKET_NAME.match(path.bucket):
                     raise cli_utils.AWSBucketNameInvalid("Bucket name is not valid")
 
-                self.s3_conn.get_bucket(path.bucket)
+                self.s3_conn.Bucket(path.bucket)
             except S3ResponseError as e:
                 if e.status == 403:
                     self.logger.error('Invalid credentials for this bucket, aborting')
